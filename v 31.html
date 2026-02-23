@@ -8,10 +8,22 @@
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #0a0e1a;
+            background: radial-gradient(circle at 20% 20%, #182748 0%, #0a1122 45%, #05080f 100%);
             font-family: 'Rajdhani', 'Segoe UI', Tahoma, sans-serif;
             user-select: none;
             transition: background-color 0.15s;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 80% 10%, rgba(0, 180, 255, 0.12), transparent 45%),
+                radial-gradient(circle at 20% 90%, rgba(180, 80, 255, 0.10), transparent 40%),
+                radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,0.35) 100%);
+            mix-blend-mode: screen;
+            z-index: 0;
         }
         #canvas-container { width: 100vw; height: 100vh; display: block; }
 
@@ -92,6 +104,7 @@
             text-align: right; font-family: 'Orbitron', monospace;
             background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px;
             border: 1px solid rgba(255,82,82,0.3);
+            backdrop-filter: blur(4px);
         }
         #combo-display {
             top: 90px; right: 20px; font-size: 32px; color: #ffd740;
@@ -1093,6 +1106,11 @@
             },
 
             spawnRateMultiplier: 0.7,
+            enemyVariety: {
+                aceJetChance: 0.28,
+                heavyDroneChance: 0.22,
+                squadronChance: 0.35
+            },
             icbmAscentTime: 1.0,
             bombGravityMultiplier: 2.5,
 
@@ -1119,6 +1137,7 @@
             fakeGravityBomb: { enabled: true, maxEntities: 10, pullRadius: 150, pullStrength: 80, expandSpeed: 60 },
             reflections: { enabled: true, updateInterval: 10, envMapIntensity: 1.5 },
             generativeAudio: { enabled: true, baseFreq: 55, combatFreqBoost: 200 },
+            ambiance: { enabled: true, windBase: 0.02, combatBoost: 0.06, musicIntensity: 1.0 },
             debris: { enabled: true, maxCount: 200, lifetime: 10.0 },
             buildingDamage: { enabled: true, rippleDecay: 2.0 },
 
@@ -2124,9 +2143,28 @@
                 this.musicGain = null;
                 this.musicNoteIndex = 0;
                 this.musicTimer = 0;
+                this.windOsc = null;
+                this.windGain = null;
+                this.combatLevel = 0;
             }
 
             init() {}
+
+            initAmbience() {
+                if(this.windOsc) return;
+                this.windOsc = this.ctx.createOscillator();
+                this.windOsc.type = 'triangle';
+                this.windOsc.frequency.value = 48;
+                this.windGain = this.ctx.createGain();
+                this.windGain.gain.value = CONFIG.ambiance.windBase;
+                const windFilter = this.ctx.createBiquadFilter();
+                windFilter.type = 'lowpass';
+                windFilter.frequency.value = 220;
+                this.windOsc.connect(windFilter);
+                windFilter.connect(this.windGain);
+                this.windGain.connect(this.masterGain);
+                this.windOsc.start();
+            }
 
             initEngineSound() {
                 this.engineOsc = this.ctx.createOscillator();
@@ -2198,6 +2236,20 @@
                 this.measureCount = 0;
             }
 
+            updateCombatState(combatRatio, speedRatio) {
+                if(!this.windGain) return;
+                const t = this.ctx.currentTime;
+                const target = CONFIG.ambiance.windBase + combatRatio * CONFIG.ambiance.combatBoost + speedRatio * 0.03;
+                this.windGain.gain.setTargetAtTime(target, t, 0.25);
+                if(this.musicGain) {
+                    this.musicGain.gain.setTargetAtTime((0.045 + combatRatio * 0.05) * CONFIG.ambiance.musicIntensity, t, 0.4);
+                }
+                if(this.padGain) {
+                    this.padGain.gain.setTargetAtTime(0.01 + combatRatio * 0.03, t, 0.4);
+                }
+                this.combatLevel = combatRatio;
+            }
+
             update(dt) {
                 if(!this.musicOsc) return;
 
@@ -2230,7 +2282,7 @@
                     const arpNotes = [440, 523, 659, 784, 659, 523, 440, 523];
                     this.arpIndex = (this.arpIndex + 1) % arpNotes.length;
                     this.arpOsc.frequency.setTargetAtTime(arpNotes[this.arpIndex], t, 0.02);
-                    this.arpGain.gain.setTargetAtTime(0.015, t, 0.01);
+                    this.arpGain.gain.setTargetAtTime(0.010 + this.combatLevel * 0.02, t, 0.01);
                     this.arpGain.gain.setTargetAtTime(0.003, t + 0.08, 0.05);
                 }
             }
@@ -3139,6 +3191,7 @@
             init() {}
 
             spawnEnemyJet(playerPos, playerQuat) {
+                const isAce = Math.random() < CONFIG.enemyVariety.aceJetChance;
                 const jet = {
                     mesh: AssetFactory.createEnemyJetMesh(),
                     hp: CONFIG.enemyJetHP * State.difficultyMultiplierHP, // Apply difficulty scaling
@@ -3149,7 +3202,8 @@
                     patrolMode: Math.random() > 0.3,
                     patrolPoint: null,
                     patrolTimer: 0,
-                    speedMultiplier: State.difficultyMultiplierSpeed // Apply speed scaling
+                    speedMultiplier: State.difficultyMultiplierSpeed * (isAce ? 1.35 : 1.0), // Apply speed scaling
+                    isAce: isAce
                 };
 
                 const offset = new THREE.Vector3(
@@ -3159,7 +3213,18 @@
                 );
                 offset.applyQuaternion(playerQuat);
                 jet.mesh.position.copy(playerPos).add(offset);
-                jet.mesh.scale.setScalar(1.5 * CONFIG.enemySizeMultiplier);
+                jet.mesh.scale.setScalar((isAce ? 1.8 : 1.5) * CONFIG.enemySizeMultiplier);
+
+                if(isAce) {
+                    jet.hp *= 1.4;
+                    jet.mesh.traverse(obj => {
+                        if(obj.isMesh && obj.material && obj.material.color) {
+                            obj.material = obj.material.clone();
+                            obj.material.color.offsetHSL(-0.02, 0.1, -0.1);
+                            if(obj.material.emissive) obj.material.emissive.offsetHSL(0.02, 0.2, 0.15);
+                        }
+                    });
+                }
 
                 if(jet.patrolMode) {
                     jet.patrolPoint = new THREE.Vector3(
@@ -3180,6 +3245,7 @@
 
             spawnDrone(playerPos, playerQuat) {
                 const type = Math.random() > 0.7 ? 'kamikaze' : 'chase';
+                const isHeavy = Math.random() < CONFIG.enemyVariety.heavyDroneChance;
                 const enemy = {
                     mesh: AssetFactory.createDroneMesh(),
                     hp: CONFIG.droneHP * State.difficultyMultiplierHP, // Apply difficulty scaling
@@ -3189,7 +3255,8 @@
                     patrolMode: Math.random() > 0.4,
                     patrolPoint: null,
                     patrolTimer: 0,
-                    rotationSpeed: Math.random() * 2 + 1
+                    rotationSpeed: Math.random() * 2 + 1,
+                    isHeavy: isHeavy
                 };
 
                 const offset = new THREE.Vector3(
@@ -3209,9 +3276,21 @@
                 }
 
                 if(type === 'kamikaze') {
-                    enemy.mesh.scale.setScalar(0.8 * CONFIG.enemySizeMultiplier);
+                    enemy.mesh.scale.setScalar((isHeavy ? 1.1 : 0.8) * CONFIG.enemySizeMultiplier);
                 } else {
-                    enemy.mesh.scale.setScalar(1.0 * CONFIG.enemySizeMultiplier);
+                    enemy.mesh.scale.setScalar((isHeavy ? 1.35 : 1.0) * CONFIG.enemySizeMultiplier);
+                }
+
+                if(isHeavy) {
+                    enemy.hp *= 1.6;
+                    enemy.speedFactor *= 0.82;
+                    enemy.mesh.traverse(obj => {
+                        if(obj.isMesh && obj.material) {
+                            obj.material = obj.material.clone();
+                            if(obj.material.emissive) obj.material.emissiveIntensity = (obj.material.emissiveIntensity || 0) + 0.35;
+                            if(obj.material.color) obj.material.color.offsetHSL(0.06, 0.08, -0.06);
+                        }
+                    });
                 }
 
                 this.scene.add(enemy.mesh);
@@ -5685,9 +5764,13 @@
             spawnEnemy() {
                 const roll = Math.random();
 
-                if(roll < 0.3) {
+                if(roll < CONFIG.enemyVariety.squadronChance) {
+                    const count = 2 + Math.floor(Math.random() * 2);
+                    for(let i = 0; i < count; i++) this.enemyManager.spawnDrone(this.player.position, this.player.quaternion);
+                    if(Math.random() < 0.45) this.enemyManager.spawnEnemyJet(this.player.position, this.player.quaternion);
+                } else if(roll < 0.75) {
                     this.enemyManager.spawnEnemyJet(this.player.position, this.player.quaternion);
-                } else if(roll < 0.7) {
+                } else {
                     this.enemyManager.spawnDrone(this.player.position, this.player.quaternion);
                 }
 
@@ -5945,6 +6028,7 @@
                     this.audio.ctx.resume();
                     this.audio.initEngineSound();
                     this.audio.initMusic();
+                    this.audio.initAmbience();
                     for(let i=0; i<Math.floor(CONFIG.initialEnemyCount * CONFIG.spawnRateMultiplier); i++) this.spawnEnemy();
                 });
                 window.addEventListener('resize', () => {
@@ -5980,8 +6064,11 @@
             }
 
             fireBullet() {
+                const jetType = State.currentJetType;
+                const spread = jetType === 'vortex' ? 2.8 : (jetType === 'phantom' ? 1.4 : 1.8);
+                const color = jetType === 'oblivion' ? 0xff3355 : (jetType === 'nova' ? 0x66bbff : 0xffee44);
                 const bulletMat = new THREE.MeshBasicMaterial({
-                    color: 0xffee44,
+                    color: color,
                     transparent: true,
                     opacity: 0.95
                 });
@@ -6001,9 +6088,9 @@
                 const center = bullet.clone();
                 const right = bullet.clone();
 
-                const offsetL = new THREE.Vector3(-1.8, -0.2, -1).applyQuaternion(this.player.quaternion);
+                const offsetL = new THREE.Vector3(-spread, -0.2, -1).applyQuaternion(this.player.quaternion);
                 const offsetC = new THREE.Vector3(0, -0.2, -1).applyQuaternion(this.player.quaternion);
-                const offsetR = new THREE.Vector3(1.8, -0.2, -1).applyQuaternion(this.player.quaternion);
+                const offsetR = new THREE.Vector3(spread, -0.2, -1).applyQuaternion(this.player.quaternion);
 
                 left.position.copy(this.player.position).add(offsetL);
                 center.position.copy(this.player.position).add(offsetC);
@@ -7608,6 +7695,9 @@
 
                     // Health system needs camera for HP bars
                     this.healthSystem.update(dt, this.camera);
+
+                    const hostileCount = State.enemies.length + State.enemyJets.length;
+                    this.audio.updateCombatState(Math.min(hostileCount / 28, 1), Math.min(this.speed / CONFIG.jetSpeedMax, 1));
 
                     // HUD
                     this.updateHUD();
