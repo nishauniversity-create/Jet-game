@@ -683,6 +683,36 @@
             transition: opacity 0.18s;
         }
         #weather-controls:hover .weather-btn-tip { opacity: 1; }
+
+        #mission-objective, #boss-hp-container, #killstreak-display, #ability-radial, #world-event-display {
+            position: absolute;
+            pointer-events: none;
+            font-family: 'Orbitron', monospace;
+            color: #d8f6ff;
+            text-shadow: 0 0 10px rgba(0, 200, 255, 0.5);
+        }
+        #mission-objective { top: 180px; left: 20px; font-size: 14px; max-width: 270px; }
+        #boss-hp-container { top: 20px; left: 50%; transform: translateX(-50%); width: 350px; display: none; }
+        #boss-hp-fill { height: 12px; background: linear-gradient(90deg, #ff1744, #ff9100); width: 100%; }
+        #killstreak-display { top: 130px; left: 20px; font-size: 18px; color: #ffe082; opacity: 0; transition: opacity 0.3s; }
+        #ability-radial { bottom: 170px; right: 20px; font-size: 12px; text-align: right; }
+        #world-event-display { top: 230px; width: 100%; text-align: center; font-size: 20px; opacity: 0; transition: opacity 0.4s; }
+
+        #tactical-map-overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            z-index: 9;
+            background: rgba(0, 6, 20, 0.85);
+            color: #b3e5fc;
+            font-family: 'Orbitron', monospace;
+            pointer-events: none;
+        }
+        #tactical-map-overlay.active { display: block; }
+        #tactical-map-title { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); font-size: 24px; }
+        #tactical-map-content { position: absolute; inset: 60px 10% 10%; border: 1px solid rgba(0,180,255,0.45); }
+        .tactical-marker { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #ff5252; box-shadow: 0 0 8px #ff5252; }
+        .tactical-marker.boss { width: 14px; height: 14px; background: #ffd740; box-shadow: 0 0 10px #ffd740; }
     </style>
 </head>
 <body>
@@ -704,6 +734,11 @@
             <div id="health-fill"></div>
         </div>
         <div id="message-center" class="hud-element">MISSION UPDATED</div>
+        <div id="mission-objective" class="hud-element">OBJECTIVE: STANDBY</div>
+        <div id="boss-hp-container" class="hud-element">BOSS PHASE <span id="boss-phase-label">I</span><div id="boss-hp-fill"></div></div>
+        <div id="killstreak-display" class="hud-element">KILLSTREAK x0</div>
+        <div id="ability-radial" class="hud-element">SLOW [READY]<br>EMP [READY]<br>CLOAK [READY]</div>
+        <div id="world-event-display" class="hud-element">ESCALATION EVENT</div>
 
         <div id="dir-left" class="dir-indicator hud-element">◄</div>
         <div id="dir-right" class="dir-indicator hud-element">►</div>
@@ -721,6 +756,11 @@
             <div class="jet-switch-btn" data-jet="oblivion">5</div>
         </div>
         <div id="jet-type-label" class="hud-element">PHANTOM</div>
+    </div>
+
+    <div id="tactical-map-overlay">
+        <div id="tactical-map-title">TACTICAL MAP</div>
+        <div id="tactical-map-content"></div>
     </div>
 
     <div id="menu">
@@ -1080,7 +1120,72 @@
             reflections: { enabled: true, updateInterval: 10, envMapIntensity: 1.5 },
             generativeAudio: { enabled: true, baseFreq: 55, combatFreqBoost: 200 },
             debris: { enabled: true, maxCount: 200, lifetime: 10.0 },
-            buildingDamage: { enabled: true, rippleDecay: 2.0 }
+            buildingDamage: { enabled: true, rippleDecay: 2.0 },
+
+            missions: [
+                { id: 1, type: 'kill', target: 25, xp: 400 },
+                { id: 2, type: 'escort', duration: 90, xp: 600 },
+                { id: 3, type: 'boss', xp: 1200 }
+            ],
+            boss: {
+                baseHP: 5500,
+                phaseThresholds: [0.7, 0.35],
+                mobileParticleScale: 0.5,
+                missileBarrageCooldown: 2.4
+            },
+            upgrades: {
+                baseCost: 200,
+                growth: 1.6,
+                maxLevel: 5,
+                nodes: ['missileTracking', 'fireRate', 'explosiveRounds', 'empMissile', 'shieldBoost']
+            },
+            abilities: {
+                slowTime: { duration: 3, cooldown: 18 },
+                empPulse: { duration: 1.2, cooldown: 14 },
+                cloakMode: { duration: 4, cooldown: 20 }
+            },
+            killstreakRewards: {
+                refill: 5,
+                shield: 10,
+                airstrike: 20
+            },
+            comboFinisher: {
+                threshold: 15,
+                duration: 1.6,
+                bloomBoost: 0.8,
+                shockwaveRadius: 120
+            },
+            cityLife: {
+                cars: 24,
+                helicopters: 6,
+                mobileScale: 0.5
+            },
+            volumetricClouds: {
+                enabled: true,
+                density: 0.45,
+                visibilityReduction: 0.35,
+                mobileFallback: true
+            },
+            weatherTransition: {
+                duration: 2.0,
+                thunderBloomSpike: 0.35
+            },
+            destructionV2: {
+                nearDistance: 320,
+                debrisLife: 2.2,
+                smokeCount: 12
+            },
+            friendlyAI: {
+                count: 2,
+                followDistance: 65,
+                attackRange: 260
+            },
+            worldEscalation: {
+                interval: 300,
+                events: ['Meteor Shower', 'EMP Blackout', 'Drone Swarm', 'Nuclear Sky'],
+                spawnRateStep: 0.12,
+                difficultyStep: 0.1
+            }
         };
 
         // === APPLY WEAPON SYSTEM BALANCE ADJUSTMENTS ===
@@ -1172,7 +1277,25 @@
             antiDroneMissiles: [],
             sonicBooms: [],
             fakeGravBombs: [],
-            debrisActive: 0
+            debrisActive: 0,
+
+            mission: { index: 0, completed: [], escortTimer: 0 },
+            playerXP: 0,
+            boss: { active: false, phase: 0, hp: 0, entity: null },
+            playerUpgrades: {
+                missileTracking: 0,
+                fireRate: 0,
+                explosiveRounds: 0,
+                empMissile: 0,
+                shieldBoost: 0
+            },
+            garage: { selectedJet: 'phantom', engineColor: '#44ccff', loadout: 'balanced' },
+            abilities: { slowTime: 0, empPulse: 0, cloakMode: 0, activeSlowTime: 0, activeCloak: 0 },
+            killstreak: { count: 0, shieldTimer: 0 },
+            comboFinisher: { active: false, timer: 0 },
+            tacticalMap: { active: false },
+            worldEscalation: { timer: 0, stage: 0, activeEvent: null },
+            friendlySquad: []
         };
 
         // ================================
@@ -5697,7 +5820,7 @@
                     if(e.code === 'KeyA') this.input.roll = 1;
                     if(e.code === 'KeyD') this.input.roll = -1;
                     if(e.code === 'Space') this.input.boost = true;
-                    if(e.code === 'KeyM') {
+                    if(e.code === 'KeyN') {
                         this.missileSystem.autoMode = !this.missileSystem.autoMode;
                     }
                     if(e.code === 'KeyF') {
@@ -7320,6 +7443,26 @@
                     }
                 }
 
+
+                if (State.boss.active && State.boss.entity && window._bossSystem) {
+                    for (let i = State.bullets.length - 1; i >= 0; i--) {
+                        const b = State.bullets[i];
+                        if (b.mesh && b.mesh.position.distanceTo(State.boss.entity.position) < 42) {
+                            window._bossSystem.damageBoss(CONFIG.bulletDamage * 0.35);
+                            this.scene.remove(b.mesh);
+                            State.bullets.splice(i, 1);
+                        }
+                    }
+                    for (let i = State.missiles.length - 1; i >= 0; i--) {
+                        const m = State.missiles[i];
+                        if (m.mesh && m.mesh.position.distanceTo(State.boss.entity.position) < 62) {
+                            window._bossSystem.damageBoss(CONFIG.missileDamage * 0.7);
+                            this.scene.remove(m.mesh);
+                            State.missiles.splice(i, 1);
+                        }
+                    }
+                }
+
                 // === TIMED SMOKE SYSTEM & VFX POLISH PASS ===
                 for(let i = State.particles.length - 1; i >= 0; i--) {
                     const p = State.particles[i];
@@ -7448,7 +7591,9 @@
             // ================================
 
             loop() {
-                const dt = Math.min(this.clock.getDelta(), 0.1);
+                const dtRaw = Math.min(this.clock.getDelta(), 0.1);
+                const abilityScale = window._abilitySystem ? window._abilitySystem.getTimeScale() : 1;
+                const dt = dtRaw * abilityScale;
 
                 if (State.playing) {
                     // Core physics and camera
@@ -8947,6 +9092,375 @@
             }
         }
 
+
+        // ================================
+        // V32 ULTRA EXPANSION SYSTEMS
+        // ================================
+        class MissionSystem {
+            init() { this.ui = document.getElementById('mission-objective'); this._syncObjective(); console.log('[MissionSystem] Ready'); }
+            update(dt) {
+                if (!State.playing) return;
+                const m = CONFIG.missions[State.mission.index];
+                if (!m) return;
+                if (m.type === 'kill' && State.totalKills >= m.target) this.completeMission();
+                if (m.type === 'escort') {
+                    State.mission.escortTimer += dt;
+                    if (State.mission.escortTimer >= m.duration) this.completeMission();
+                }
+                if (m.type === 'boss' && State.boss.active && State.boss.hp <= 0) this.completeMission();
+                this._syncObjective();
+            }
+            completeMission() {
+                const m = CONFIG.missions[State.mission.index];
+                if (!m) return;
+                State.playerXP += m.xp || 0;
+                State.mission.completed.push(m.id);
+                State.mission.index++;
+                State.mission.escortTimer = 0;
+                const msg = document.getElementById('message-center');
+                if (msg) {
+                    msg.innerText = `MISSION ${m.id} COMPLETE +${m.xp || 0} XP`;
+                    msg.style.opacity = 1;
+                    setTimeout(() => msg.style.opacity = 0, 1600);
+                }
+                console.log('[MissionSystem] Mission complete', m.id);
+            }
+            _syncObjective() {
+                if (!this.ui) return;
+                const m = CONFIG.missions[State.mission.index];
+                if (!m) { this.ui.innerText = 'OBJECTIVE: CAMPAIGN COMPLETE'; return; }
+                if (m.type === 'kill') this.ui.innerText = `OBJECTIVE: ELIMINATE ${m.target} HOSTILES (${Math.min(State.totalKills, m.target)}/${m.target})`;
+                if (m.type === 'escort') this.ui.innerText = `OBJECTIVE: ESCORT SQUAD ${(State.mission.escortTimer).toFixed(0)}/${m.duration}s`;
+                if (m.type === 'boss') this.ui.innerText = 'OBJECTIVE: DESTROY BOSS DREADNAUGHT';
+            }
+        }
+
+        class BossSystem {
+            init() { this.ui = document.getElementById('boss-hp-container'); this.fill = document.getElementById('boss-hp-fill'); this.phase = document.getElementById('boss-phase-label'); this.timer = 0; console.log('[BossSystem] Ready'); }
+            update(dt) {
+                if (!State.playing) return;
+                const mission = CONFIG.missions[State.mission.index];
+                if (mission && mission.type === 'boss' && !State.boss.active) this.spawnBoss();
+                if (!State.boss.active || !State.boss.entity) return;
+                this.timer += dt;
+                const boss = State.boss.entity;
+                const t = performance.now() * 0.001;
+                boss.position.x += Math.sin(t * 0.6) * dt * 40;
+                boss.position.z += Math.cos(t * 0.4) * dt * 25;
+                if (this.timer > CONFIG.boss.missileBarrageCooldown && gameEngineRef?.enemyManager) {
+                    this.timer = 0;
+                    for (let i = 0; i < (State.platform.isMobile ? 2 : 4); i++) {
+                        gameEngineRef.enemyManager.spawnDrone(gameEngineRef.player.position, gameEngineRef.player.quaternion);
+                    }
+                }
+                const hpRatio = Math.max(0, State.boss.hp / CONFIG.boss.baseHP);
+                State.boss.phase = hpRatio < CONFIG.boss.phaseThresholds[1] ? 2 : hpRatio < CONFIG.boss.phaseThresholds[0] ? 1 : 0;
+                this.ui.style.display = 'block';
+                this.fill.style.width = `${Math.max(0, hpRatio * 100)}%`;
+                this.phase.innerText = ['I', 'II', 'III'][State.boss.phase];
+            }
+            spawnBoss() {
+                if (!gameEngineRef) return;
+                const g = new THREE.Group();
+                const hull = new THREE.Mesh(new THREE.BoxGeometry(40, 12, 80), new THREE.MeshStandardMaterial({ color: 0x3d3d52, metalness: 0.8, roughness: 0.25 }));
+                const shield = new THREE.Mesh(new THREE.SphereGeometry(35, 16, 16), new THREE.MeshBasicMaterial({ color: 0x55ccff, transparent: true, opacity: 0.18 }));
+                g.add(hull); g.add(shield);
+                g.position.copy(gameEngineRef.player.position).add(new THREE.Vector3(0, 120, -700));
+                gameEngineRef.scene.add(g);
+                State.boss.active = true;
+                State.boss.hp = CONFIG.boss.baseHP;
+                State.boss.entity = g;
+                console.log('[BossSystem] Spawned');
+            }
+            damageBoss(amount) {
+                if (!State.boss.active) return;
+                const scaled = State.platform.isMobile ? amount * CONFIG.boss.mobileParticleScale : amount;
+                State.boss.hp -= scaled;
+                if (State.boss.hp <= 0) {
+                    if (State.boss.entity?.parent) State.boss.entity.parent.remove(State.boss.entity);
+                    State.boss.active = false;
+                    this.ui.style.display = 'none';
+                    console.log('[BossSystem] Destroyed');
+                }
+            }
+        }
+
+        class UpgradeSystem {
+            init() { this.applyUpgrades(); console.log('[UpgradeSystem] Ready'); }
+            update() {}
+            getUpgradeCost(node) {
+                const lvl = State.playerUpgrades[node] || 0;
+                return Math.floor(CONFIG.upgrades.baseCost * Math.pow(CONFIG.upgrades.growth, lvl));
+            }
+            purchase(node) {
+                if (!CONFIG.upgrades.nodes.includes(node)) return false;
+                const cost = this.getUpgradeCost(node);
+                if (State.score < cost) return false;
+                if ((State.playerUpgrades[node] || 0) >= CONFIG.upgrades.maxLevel) return false;
+                State.score -= cost;
+                State.playerUpgrades[node] = (State.playerUpgrades[node] || 0) + 1;
+                this.applyUpgrades();
+                return true;
+            }
+            applyUpgrades() {
+                CONFIG.missileTrackingStrength = 5 + (State.playerUpgrades.missileTracking || 0) * 1.2;
+                CONFIG.fireRate = Math.max(0.05, 0.12 - (State.playerUpgrades.fireRate || 0) * 0.01);
+                CONFIG.missileDamage = 500 + (State.playerUpgrades.explosiveRounds || 0) * 80;
+                console.log('[UpgradeSystem] Applied', JSON.stringify(State.playerUpgrades));
+            }
+        }
+
+        class GarageSystem {
+            init() { this._injectGarageUI(); console.log('[GarageSystem] Ready'); }
+            update() {}
+            _injectGarageUI() {
+                const menu = document.getElementById('menu');
+                if (!menu || document.getElementById('garage-panel')) return;
+                const p = document.createElement('div');
+                p.id = 'garage-panel';
+                p.style.marginTop = '14px';
+                p.style.color = '#9fd8ff';
+                p.style.fontFamily = 'Orbitron, monospace';
+                p.style.fontSize = '12px';
+                p.innerHTML = `GARAGE | JET: ${State.garage.selectedJet.toUpperCase()} | ENGINE: ${State.garage.engineColor} | LOADOUT: ${State.garage.loadout}`;
+                menu.appendChild(p);
+            }
+        }
+
+        class AbilitySystem {
+            init() { this.ui = document.getElementById('ability-radial'); this.bind(); console.log('[AbilitySystem] Ready'); }
+            bind() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Digit7') this.activate('slowTime');
+                    if (e.code === 'Digit8') this.activate('empPulse');
+                    if (e.code === 'Digit9') this.activate('cloakMode');
+                });
+            }
+            activate(name) {
+                if (State.abilities[name] > 0) return;
+                State.abilities[name] = CONFIG.abilities[name].cooldown;
+                if (name === 'slowTime') State.abilities.activeSlowTime = CONFIG.abilities.slowTime.duration;
+                if (name === 'cloakMode') State.abilities.activeCloak = CONFIG.abilities.cloakMode.duration;
+                if (name === 'empPulse') {
+                    State.enemies.forEach(e => e.velocity?.multiplyScalar?.(0.2));
+                    State.enemyJets.forEach(e => e.velocity?.multiplyScalar?.(0.2));
+                }
+            }
+            update(dt) {
+                if (!State.playing) return;
+                for (const k of ['slowTime','empPulse','cloakMode']) State.abilities[k] = Math.max(0, State.abilities[k]-dt);
+                State.abilities.activeSlowTime = Math.max(0, State.abilities.activeSlowTime-dt);
+                State.abilities.activeCloak = Math.max(0, State.abilities.activeCloak-dt);
+                if (this.ui) {
+                    const fmt = (n) => n <= 0 ? 'READY' : `${n.toFixed(1)}s`;
+                    this.ui.innerHTML = `SLOW [${fmt(State.abilities.slowTime)}]<br>EMP [${fmt(State.abilities.empPulse)}]<br>CLOAK [${fmt(State.abilities.cloakMode)}]`;
+                }
+            }
+            getTimeScale() { return State.abilities.activeSlowTime > 0 ? 0.45 : 1; }
+        }
+
+        class KillstreakSystem {
+            init() { this.ui = document.getElementById('killstreak-display'); this.lastKills = 0; console.log('[KillstreakSystem] Ready'); }
+            update(dt) {
+                if (!State.playing) return;
+                if (State.totalKills > this.lastKills) {
+                    State.killstreak.count += (State.totalKills - this.lastKills);
+                    this.lastKills = State.totalKills;
+                    this.applyRewards();
+                }
+                if (State.combo <= 1) State.killstreak.count = 0;
+                State.killstreak.shieldTimer = Math.max(0, State.killstreak.shieldTimer - dt);
+                this.ui.innerText = `KILLSTREAK x${State.killstreak.count}`;
+                this.ui.style.opacity = State.killstreak.count > 1 ? 1 : 0;
+            }
+            applyRewards() {
+                const k = State.killstreak.count;
+                if (k === CONFIG.killstreakRewards.refill) State.missileCount = Infinity;
+                if (k === CONFIG.killstreakRewards.shield) State.killstreak.shieldTimer = 12;
+                if (k === CONFIG.killstreakRewards.airstrike) {
+                    for (let i=0;i<6;i++) gameEngineRef?.enemyManager?.spawnDrone(gameEngineRef.player.position, gameEngineRef.player.quaternion);
+                }
+            }
+        }
+
+        class ComboFinisherSystem {
+            init() { this.baseBloom = null; console.log('[ComboFinisherSystem] Ready'); }
+            update(dt) {
+                if (!State.playing || !gameEngineRef?.bloomPass) return;
+                if (this.baseBloom === null) this.baseBloom = gameEngineRef.bloomPass.strength;
+                if (!State.comboFinisher.active && State.combo > CONFIG.comboFinisher.threshold) {
+                    State.comboFinisher.active = true;
+                    State.comboFinisher.timer = CONFIG.comboFinisher.duration;
+                }
+                if (State.comboFinisher.active) {
+                    State.comboFinisher.timer -= dt;
+                    gameEngineRef.bloomPass.strength = this.baseBloom + CONFIG.comboFinisher.bloomBoost;
+                    if (State.comboFinisher.timer <= 0) {
+                        State.comboFinisher.active = false;
+                        gameEngineRef.bloomPass.strength = this.baseBloom;
+                    }
+                }
+            }
+        }
+
+        class CityLifeSystem {
+            init() {
+                this.cars = []; this.helis = [];
+                const scale = State.platform.isMobile ? CONFIG.cityLife.mobileScale : 1;
+                const carCount = Math.floor(CONFIG.cityLife.cars * scale);
+                const heliCount = Math.floor(CONFIG.cityLife.helicopters * scale);
+                if (!gameEngineRef) return;
+                for (let i=0;i<carCount;i++) {
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(3,1,1.4), new THREE.MeshStandardMaterial({ color: 0x90a4ae }));
+                    m.position.set((Math.random()-0.5)*1200, 1, (Math.random()-0.5)*1200);
+                    gameEngineRef.scene.add(m); this.cars.push({mesh:m, speed: 18+Math.random()*15});
+                }
+                for (let i=0;i<heliCount;i++) {
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(4,1,2), new THREE.MeshStandardMaterial({ color: 0x607d8b }));
+                    m.position.set((Math.random()-0.5)*900, 220+Math.random()*80, (Math.random()-0.5)*900);
+                    gameEngineRef.scene.add(m); this.helis.push({mesh:m, speed: 20+Math.random()*15});
+                }
+                console.log('[CityLifeSystem] Ready', carCount, heliCount);
+            }
+            update(dt) {
+                const t = performance.now()*0.001;
+                this.cars.forEach((c,i)=>{ c.mesh.position.x += Math.sin(t+i)*c.speed*dt; });
+                this.helis.forEach((h,i)=>{ h.mesh.position.z += Math.cos(t*0.7+i)*h.speed*dt; h.mesh.position.y += Math.sin(t*1.5+i)*dt*4; });
+            }
+        }
+
+        class VolumetricCloudSystem {
+            init() {
+                if (!gameEngineRef) return;
+                this.clouds = new THREE.Group();
+                const isMobile = State.platform.isMobile && CONFIG.volumetricClouds.mobileFallback;
+                const count = isMobile ? 8 : 20;
+                for (let i=0;i<count;i++) {
+                    const geo = isMobile ? new THREE.PlaneGeometry(180, 90) : new THREE.SphereGeometry(40 + Math.random()*30, 10, 8);
+                    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: isMobile ? 0.25 : 0.15, side: THREE.DoubleSide });
+                    const c = new THREE.Mesh(geo, mat);
+                    c.position.set((Math.random()-0.5)*1800, 250 + Math.random()*220, (Math.random()-0.5)*1800);
+                    if (isMobile) c.rotation.x = -Math.PI * 0.5;
+                    this.clouds.add(c);
+                }
+                gameEngineRef.scene.add(this.clouds);
+                console.log('[VolumetricCloudSystem] Ready');
+            }
+            update(dt) {
+                if (!this.clouds || !gameEngineRef?.scene?.fog) return;
+                this.clouds.children.forEach((c,i)=>{ c.position.x += Math.sin(i+performance.now()*0.0001)*dt*8; });
+                const reduce = CONFIG.volumetricClouds.visibilityReduction;
+                gameEngineRef.scene.fog.density = THREE.MathUtils.lerp(gameEngineRef.scene.fog.density, 0.00025 + reduce * 0.0002, dt * 0.2);
+            }
+        }
+
+        class WeatherTransitionSystem {
+            init() { this.from = null; this.to = null; this.t = 1; console.log('[WeatherTransitionSystem] Ready'); }
+            startTransition(next) { this.from = this.to || 'sun'; this.to = next; this.t = 0; }
+            update(dt) {
+                if (!gameEngineRef) return;
+                if (this.t < 1) {
+                    this.t = Math.min(1, this.t + dt / CONFIG.weatherTransition.duration);
+                    const blend = this.t;
+                    gameEngineRef.scene.fog.density = THREE.MathUtils.lerp(0.0002, 0.00042, blend);
+                    if (this.to === 'thunder' && gameEngineRef.bloomPass) {
+                        gameEngineRef.bloomPass.strength += CONFIG.weatherTransition.thunderBloomSpike * dt;
+                    }
+                }
+            }
+        }
+
+        class BuildingDestructionV2System {
+            init() { console.log('[BuildingDestructionV2System] Ready'); }
+            update(dt) {
+                if (!gameEngineRef?.player) return;
+                const p = gameEngineRef.player.position;
+                for (const b of State.buildings) {
+                    if (!b?.mesh || !b.hp || b.hp > 0) continue;
+                    const d = b.mesh.position.distanceTo(p);
+                    if (d > CONFIG.destructionV2.nearDistance) continue;
+                    b.mesh.position.y -= dt * 8;
+                    b.mesh.rotation.x += dt * 0.4;
+                }
+            }
+        }
+
+        class FriendlyAISystem {
+            init() {
+                if (!gameEngineRef) return;
+                for (let i=0;i<CONFIG.friendlyAI.count;i++) {
+                    const m = AssetFactory.createJetMesh(i % 2 ? 'vortex' : 'phantom');
+                    m.position.copy(gameEngineRef.player.position).add(new THREE.Vector3((i?1:-1)*40, 10, -60));
+                    gameEngineRef.scene.add(m);
+                    State.friendlySquad.push({ mesh: m, mode: 'defend' });
+                }
+                this.command = 'defend';
+                document.addEventListener('keydown', (e)=>{
+                    if (e.code === 'KeyJ') this.command = 'attack';
+                    if (e.code === 'KeyK') this.command = 'defend';
+                    if (e.code === 'KeyL') this.command = 'regroup';
+                });
+                console.log('[FriendlyAISystem] Ready');
+            }
+            update(dt) {
+                if (!gameEngineRef?.player) return;
+                const target = gameEngineRef.player.position;
+                State.friendlySquad.forEach((f, i) => {
+                    const desired = target.clone().add(new THREE.Vector3((i?1:-1)*25, 8, this.command === 'attack' ? -100 : -50));
+                    f.mesh.position.lerp(desired, dt * 1.4);
+                });
+            }
+        }
+
+        class TacticalMapSystem {
+            init() {
+                this.overlay = document.getElementById('tactical-map-overlay');
+                this.content = document.getElementById('tactical-map-content');
+                document.addEventListener('keydown', (e)=>{ if(e.code==='KeyM') this.toggle(); });
+                const btn = document.createElement('button');
+                btn.innerText = 'MAP';
+                btn.className = 'mobile-button';
+                btn.style.position = 'absolute'; btn.style.left = '14px'; btn.style.bottom = '220px'; btn.style.pointerEvents='auto';
+                btn.onclick = ()=>this.toggle();
+                document.getElementById('mobile-controls')?.appendChild(btn);
+                console.log('[TacticalMapSystem] Ready');
+            }
+            toggle() { State.tacticalMap.active = !State.tacticalMap.active; this.overlay.classList.toggle('active', State.tacticalMap.active); }
+            update() {
+                if (!State.tacticalMap.active || !this.content || !gameEngineRef?.player) return;
+                this.content.innerHTML = '';
+                const add = (x,z,boss=false) => {
+                    const m = document.createElement('div');
+                    m.className = `tactical-marker${boss?' boss':''}`;
+                    m.style.left = `${50 + x}%`; m.style.top = `${50 + z}%`;
+                    this.content.appendChild(m);
+                };
+                State.enemies.slice(0,30).forEach(e=>{ if(e.mesh) add((e.mesh.position.x-gameEngineRef.player.position.x)/20, (e.mesh.position.z-gameEngineRef.player.position.z)/20); });
+                if (State.boss.active && State.boss.entity) add((State.boss.entity.position.x-gameEngineRef.player.position.x)/18, (State.boss.entity.position.z-gameEngineRef.player.position.z)/18, true);
+            }
+        }
+
+        class WorldEscalationSystem {
+            init() { this.ui = document.getElementById('world-event-display'); console.log('[WorldEscalationSystem] Ready'); }
+            update(dt) {
+                if (!State.playing) return;
+                State.worldEscalation.timer += dt;
+                if (State.worldEscalation.timer >= CONFIG.worldEscalation.interval) {
+                    State.worldEscalation.timer = 0;
+                    State.worldEscalation.stage++;
+                    const events = CONFIG.worldEscalation.events;
+                    State.worldEscalation.activeEvent = events[State.worldEscalation.stage % events.length];
+                    CONFIG.spawnRateMultiplier += CONFIG.worldEscalation.spawnRateStep;
+                    State.difficultyMultiplierHP += CONFIG.worldEscalation.difficultyStep;
+                    State.difficultyMultiplierSpeed += CONFIG.worldEscalation.difficultyStep;
+                    this.ui.innerText = `WORLD EVENT: ${State.worldEscalation.activeEvent.toUpperCase()}`;
+                    this.ui.style.opacity = 1;
+                    setTimeout(()=> this.ui.style.opacity = 0, 2200);
+                    console.log('[WorldEscalationSystem] Event', State.worldEscalation.activeEvent);
+                }
+            }
+        }
+
         window.onload = () => {
             const app = new GameEngine();
             gameEngineRef = app;
@@ -9009,7 +9523,27 @@
             const weatherAudio      = new WeatherAudioSystem();
             const weatherOrch       = new WeatherOrchestrator(weatherSystem, rainSystem, lightningSystem, birdsSystem, weatherAudio);
 
+            // ===== V32 Ultra systems =====
+            const missionSystem = new MissionSystem();
+            const bossSystem = new BossSystem();
+            const upgradeSystem = new UpgradeSystem();
+            const garageSystem = new GarageSystem();
+            const abilitySystem = new AbilitySystem();
+            const killstreakSystem = new KillstreakSystem();
+            const comboFinisherSystem = new ComboFinisherSystem();
+            const cityLifeSystem = new CityLifeSystem();
+            const volumetricCloudSystem = new VolumetricCloudSystem();
+            const weatherTransitionSystem = new WeatherTransitionSystem();
+            const buildingDestructionV2System = new BuildingDestructionV2System();
+            const friendlyAISystem = new FriendlyAISystem();
+            const tacticalMapSystem = new TacticalMapSystem();
+            const worldEscalationSystem = new WorldEscalationSystem();
+
             window._weatherSystem = weatherSystem;
+            window._weatherTransitionSystem = weatherTransitionSystem;
+            window._upgradeSystem = upgradeSystem;
+            window._bossSystem = bossSystem;
+            window._abilitySystem = abilitySystem;
 
             SystemRegistry.register(weatherSystem);
             SystemRegistry.register(rainSystem);
@@ -9021,6 +9555,21 @@
             SystemRegistry.register(birdsSystem);
             SystemRegistry.register(weatherAudio);
             SystemRegistry.register(weatherOrch);
+
+            SystemRegistry.register(missionSystem);
+            SystemRegistry.register(bossSystem);
+            SystemRegistry.register(upgradeSystem);
+            SystemRegistry.register(garageSystem);
+            SystemRegistry.register(abilitySystem);
+            SystemRegistry.register(killstreakSystem);
+            SystemRegistry.register(comboFinisherSystem);
+            SystemRegistry.register(cityLifeSystem);
+            SystemRegistry.register(volumetricCloudSystem);
+            SystemRegistry.register(weatherTransitionSystem);
+            SystemRegistry.register(buildingDestructionV2System);
+            SystemRegistry.register(friendlyAISystem);
+            SystemRegistry.register(tacticalMapSystem);
+            SystemRegistry.register(worldEscalationSystem);
 
             SystemRegistry.initAll();
 
@@ -9043,6 +9592,7 @@
                     const w = btn.dataset.weather;
                     if (!w || !window._weatherSystem) return;
                     window._weatherSystem.setWeather(w);
+                    if (window._weatherTransitionSystem) window._weatherTransitionSystem.startTransition(w);
                     // Ripple animation
                     btn.style.transform = 'scale(0.82)';
                     setTimeout(() => { btn.style.transform = ''; }, 200);
